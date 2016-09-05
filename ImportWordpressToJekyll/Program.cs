@@ -12,13 +12,56 @@ namespace ConsoleApplication4
     class Program
     {
 
-        static string wpxml = @"d:\HomeDisk\BlogWork\wordpress.2016-09-01.xml";
-        static string output = @"D:\HomeDisk\BlogWork\columns\_posts";
+        //static string wpxml = @"D:\HomeDisk\BlogWork\wordpress.2016-09-01.xml";
+        const string input = @"D:\HomeDisk\BlogWork\wpdata";
+        const string output = @"D:\HomeDisk\BlogWork\wpdata\_wp_posts";
+
+
+        //static Dictionary<string, string> slugmap = null;
+        //static Dictionary<string, string> guidmap = null;
+        //static Dictionary<string, string> cspostmap = null;
+
+        static Dictionary<string, List<string>> slugRevMap = null;
+        static Dictionary<string, List<string>> cspostRevMap = null;
+        static void InitMaps()
+        {
+            //slugmap = LoadMap(Path.Combine(input, "slugmap.txt"));
+            //guidmap = LoadMap(Path.Combine(input, "guidmap.txt"));
+            //cspostmap = LoadMap(Path.Combine(input, "cspostmap.txt"));
+
+            slugRevMap = LoadRevMap(Path.Combine(input, "slugmap.txt"));
+            cspostRevMap = LoadRevMap(Path.Combine(input, "cspostmap.txt"));
+        }
+        static Dictionary<string, string> LoadMap(string mapfile)
+        {
+            Dictionary<string, string> map = new Dictionary<string, string>();
+            foreach (string line in File.ReadAllLines(mapfile))
+            {
+                string[] segments = line.Split(';')[0].Split(' ');
+                map.Add(segments[0], segments[1]);
+            }
+            return map;
+        }
+        static Dictionary<string, List<string>> LoadRevMap(string mapfile)
+        {
+            Dictionary<string, List<string>> map = new Dictionary<string, List<string>>();
+            foreach (string line in File.ReadAllLines(mapfile))
+            {
+                string[] segments = line.Split(';')[0].Split(' ');
+                //map.Add(segments[0], segments[1]);
+                if (map.ContainsKey(segments[1]) == false) map[segments[1]] = new List<string>();
+                map[segments[1]].Add(segments[0]);
+            }
+            return map;
+        }
+
 
         static void Main(string[] args)
         {
+            InitMaps();
+
             XmlDocument xmldoc = new XmlDocument();
-            xmldoc.Load(wpxml);
+            xmldoc.Load(Path.Combine(input, "wordpress.xml"));
 
             XmlNamespaceManager xnm = new XmlNamespaceManager(xmldoc.NameTable);
             xnm.AddNamespace("excerpt", "http://wordpress.org/export/1.2/excerpt/");
@@ -43,6 +86,7 @@ namespace ConsoleApplication4
                 string title = item["title"].InnerText;
                 string post_type = item.SelectSingleNode("wp:post_type", xnm).InnerText;
                 string post_name = item.SelectSingleNode("wp:post_name", xnm).InnerText;
+                string post_id = item.SelectSingleNode("wp:post_id", xnm).InnerText;
                 string status = item.SelectSingleNode("wp:status", xnm).InnerText;
                 string content = item.SelectSingleNode("content:encoded", xnm).InnerText;
 
@@ -86,6 +130,10 @@ namespace ConsoleApplication4
                 tags: []
                 published: true
                 comments: true
+                permalink: "/2016/06/11/docker-for-window-beta-evaluate/"
+                redirect_from:
+                  - /post/123456789/
+                  - /post/123456789/my-amazing-post/
                 ---
                 <!-- html content here -->
                 */
@@ -105,6 +153,29 @@ namespace ConsoleApplication4
                 tw.WriteLine($"published: true");
                 tw.WriteLine($"comments: true");
                 tw.WriteLine($"permalink: {JString(permalink)}");
+                tw.WriteLine($"redirect_from:");
+                {
+                    if (slugRevMap.ContainsKey(post_id))
+                    {
+                        foreach (string slug in slugRevMap[post_id])
+                        {
+                            tw.WriteLine($"  - /columns/post/{pubdate:yyyy}/{pubdate:MM}/{pubdate:dd}/{slug}.aspx/");
+                            tw.WriteLine($"  - /post/{pubdate:yyyy}/{pubdate:MM}/{pubdate:dd}/{slug}.aspx/");
+                            tw.WriteLine($"  - /post/{slug}.aspx/");
+                            tw.WriteLine($"  - /columns/{pubdate:yyyy}/{pubdate:MM}/{pubdate:dd}/{slug}.aspx/");
+                            tw.WriteLine($"  - /columns/{slug}.aspx/");
+                        }
+                    }
+
+                    if (cspostRevMap.ContainsKey(post_id))
+                    {
+                        foreach (string csid in cspostRevMap[post_id])
+                        {
+                            tw.WriteLine($"  - /blogs/chicken/archive/{pubdate:yyyy}/{pubdate:MM}/{pubdate:dd}/{csid}.aspx/");
+                        }
+                    }
+                }
+                tw.WriteLine($"wordpress_postid: {post_id}");
                 tw.WriteLine($"---");
                 tw.Write(content);
                 tw.Close();
